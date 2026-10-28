@@ -3,558 +3,385 @@ import io
 import base64
 
 import streamlit as st
-from PIL import Image, ImageOps
 from openai import OpenAI
+from PIL import Image, ImageOps
 
 
-# ==================================================
-# CONFIGURACIÓN
-# ==================================================
+# --------------------------------------------------
+# Configuración
+# --------------------------------------------------
 
 st.set_page_config(
-    page_title="VisionAI | Image Analyzer",
-    page_icon="🔎",
+    page_title="VisionAI | Análisis de imágenes",
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
+# Estilos discretos
+st.markdown(
+    """
+    <style>
+        .block-container {
+            max-width: 1180px;
+            padding-top: 2.5rem;
+            padding-bottom: 3rem;
+        }
 
-# ==================================================
-# ESTILOS VISUALES
-# ==================================================
+        h1, h2, h3 {
+            letter-spacing: -0.035em;
+        }
 
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+        .subtitle {
+            color: #64748b;
+            font-size: 1rem;
+            margin-top: -0.5rem;
+            margin-bottom: 2rem;
+        }
 
-:root {
-    --bg: #0a1020;
-    --panel: #111a2d;
-    --border: #293852;
-    --text: #f1f5f9;
-    --muted: #9aaac0;
-    --accent: #818cf8;
-}
+        .section-label {
+            color: #64748b;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 0.8rem;
+        }
 
-.stApp {
-    background:
-        radial-gradient(ellipse at 70% 0%, #20234a 0%, #0a1020 48%);
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-}
+        div[data-testid="stFileUploader"] {
+            border-radius: 8px;
+        }
 
-[data-testid="stHeader"] {
-    background: transparent;
-}
+        div.stButton > button {
+            width: 100%;
+            min-height: 2.8rem;
+            font-weight: 500;
+            border-radius: 6px;
+        }
 
-[data-testid="stSidebar"] {
-    background: #0d1425;
-    border-right: 1px solid #293852;
-}
+        div[data-testid="stSidebar"] {
+            border-right: 1px solid #e5e7eb;
+        }
 
-h1, h2, h3 {
-    font-family: 'Space Grotesk', sans-serif !important;
-    color: #f1f5f9 !important;
-    letter-spacing: -0.5px;
-}
+        .footer-note {
+            color: #94a3b8;
+            font-size: 0.8rem;
+            margin-top: 2rem;
+        }
 
-h1 {
-    font-size: clamp(2rem, 4vw, 3rem) !important;
-    font-weight: 700 !important;
-}
-
-p, label {
-    color: #cbd5e1;
-}
-
-.hero {
-    padding: 1.5rem 0 1.2rem;
-}
-
-.eyebrow {
-    display: inline-block;
-    color: #c4b5fd;
-    background: #272449;
-    border: 1px solid #454078;
-    border-radius: 999px;
-    padding: 6px 12px;
-    font-size: 0.74rem;
-    font-weight: 700;
-    letter-spacing: 1.2px;
-    margin-bottom: 15px;
-}
-
-.hero-subtitle {
-    max-width: 700px;
-    color: #a5b4cb;
-    font-size: 1.03rem;
-    line-height: 1.75;
-}
-
-.panel {
-    background: linear-gradient(145deg, #151f35, #10182a);
-    border: 1px solid #2b3b57;
-    border-radius: 18px;
-    padding: 20px;
-    margin-bottom: 14px;
-}
-
-.panel-title {
-    color: #f1f5f9;
-    font-size: 1rem;
-    font-weight: 700;
-    margin-bottom: 8px;
-}
-
-.panel-description {
-    color: #9eacc1;
-    font-size: 0.87rem;
-    line-height: 1.6;
-}
-
-.section-label {
-    color: #a5b4fc;
-    font-size: 0.76rem;
-    font-weight: 700;
-    letter-spacing: 1.3px;
-    text-transform: uppercase;
-    margin: 10px 0;
-}
-
-.stTextInput input, .stTextArea textarea {
-    background: #10192c !important;
-    color: #f1f5f9 !important;
-    border: 1px solid #34445f !important;
-    border-radius: 11px !important;
-}
-
-.stTextInput input:focus, .stTextArea textarea:focus {
-    border-color: #818cf8 !important;
-    box-shadow: 0 0 0 1px #818cf8 !important;
-}
-
-[data-testid="stFileUploader"] {
-    background: #111b2f;
-    border: 1px dashed #526180;
-    border-radius: 14px;
-    padding: 8px;
-}
-
-.stButton > button {
-    min-height: 44px;
-    border-radius: 11px;
-    border: 1px solid #7774e8;
-    background: linear-gradient(135deg, #7774e8, #635bcd);
-    color: white;
-    font-weight: 700;
-    transition: all 0.2s ease;
-}
-
-.stButton > button:hover {
-    background: linear-gradient(135deg, #918cfb, #7774e8);
-    border-color: #aaa5ff;
-    transform: translateY(-1px);
-}
-
-div[data-testid="stMetric"] {
-    background: #111b2f;
-    border: 1px solid #2b3b57;
-    border-radius: 13px;
-    padding: 14px;
-}
-
-div[data-testid="stMetricLabel"] {
-    color: #a5b4cb;
-}
-
-div[data-testid="stMetricValue"] {
-    color: #f1f5f9;
-}
-
-.result-box {
-    background: linear-gradient(145deg, #171d38, #111a2d);
-    border: 1px solid #494779;
-    border-left: 4px solid #918cfb;
-    border-radius: 15px;
-    padding: 22px;
-    margin: 10px 0 20px;
-    color: #e2e8f0;
-    line-height: 1.8;
-}
-
-.sidebar-caption {
-    color: #96a6bd;
-    font-size: 0.83rem;
-    line-height: 1.7;
-}
-
-.footer {
-    border-top: 1px solid #293852;
-    color: #75849b;
-    text-align: center;
-    font-size: 0.78rem;
-    margin-top: 35px;
-    padding: 20px 0;
-}
-
-hr {
-    border-color: #293852;
-}
-</style>
-""", unsafe_allow_html=True)
+        hr {
+            margin-top: 1.5rem;
+            margin-bottom: 1.5rem;
+            border-color: #e5e7eb;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
-# ==================================================
-# ESTADO DE LA APLICACIÓN
-# ==================================================
+# --------------------------------------------------
+# Funciones
+# --------------------------------------------------
 
-if "analysis_result" not in st.session_state:
-    st.session_state.analysis_result = None
+def prepare_image(uploaded_file):
+    """Convierte la imagen a JPEG y la codifica en Base64."""
+    image = Image.open(uploaded_file)
+    image = ImageOps.exif_transpose(image)
 
-if "analysis_signature" not in st.session_state:
-    st.session_state.analysis_signature = None
+    if image.mode not in ("RGB", "L"):
+        image = image.convert("RGB")
+    elif image.mode == "L":
+        image = image.convert("RGB")
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", quality=90)
+
+    encoded_image = base64.b64encode(
+        buffer.getvalue()
+    ).decode("utf-8")
+
+    return image, encoded_image
 
 
-# ==================================================
-# BARRA LATERAL
-# ==================================================
+def analyze_image(api_key, encoded_image, analysis_type, context):
+    """Envía la imagen a GPT-4o y devuelve el análisis."""
+
+    client = OpenAI(api_key=api_key)
+
+    prompts = {
+        "Descripción general": (
+            "Describe en español el contenido de la imagen. "
+            "Identifica los elementos principales, el entorno "
+            "y los detalles visuales relevantes."
+        ),
+        "Análisis detallado": (
+            "Realiza un análisis detallado en español. "
+            "Describe los objetos, personas, colores, composición, "
+            "relaciones entre elementos y detalles relevantes. "
+            "No inventes información que no pueda observarse."
+        ),
+        "Lectura de texto": (
+            "Identifica y transcribe en español el texto visible "
+            "en la imagen. Conserva, en lo posible, su estructura. "
+            "Si hay texto ilegible, indícalo."
+        ),
+        "Pregunta personalizada": (
+            "Responde en español a la pregunta o instrucción "
+            "del usuario sobre la imagen. Distingue claramente "
+            "lo observable de cualquier inferencia."
+        ),
+    }
+
+    prompt = prompts[analysis_type]
+
+    if context.strip():
+        prompt += (
+            "\n\nInstrucciones adicionales del usuario:\n"
+            + context.strip()
+        )
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": prompt,
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": (
+                                "data:image/jpeg;base64,"
+                                + encoded_image
+                            )
+                        },
+                    },
+                ],
+            }
+        ],
+        max_tokens=800,
+    )
+
+    return response.choices[0].message.content or (
+        "No se recibió una respuesta."
+    )
+
+
+# --------------------------------------------------
+# Barra lateral
+# --------------------------------------------------
 
 with st.sidebar:
-    st.markdown("""
-    <div style="padding: 4px 0 18px;">
-        <div style="font-size: 2.4rem;">🔎</div>
-        <div style="font-family: 'Space Grotesk', sans-serif;
-                    font-size: 1.65rem; font-weight: 700;
-                    color: #f1f5f9;">VisionAI</div>
-        <div style="color: #9aaac0; font-size: 0.82rem;">
-            Intelligent Image Analysis
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.title("VisionAI")
+    st.caption("Herramienta de análisis visual")
+    st.divider()
 
-    st.markdown("---")
-    st.markdown("### ⚙️ Configuración")
+    st.subheader("Configuración")
 
     api_key = st.text_input(
         "Clave API de OpenAI",
         type="password",
+        help="La clave se utiliza para realizar el análisis.",
         placeholder="sk-...",
-        help="Se utiliza para enviar la imagen al modelo de OpenAI.",
     )
 
     st.caption(
-        "Tu clave se utiliza para las solicitudes de esta sesión. "
-        "No necesitas guardarla como variable de entorno."
+        "Necesitas una clave API válida de OpenAI "
+        "para utilizar el servicio."
     )
 
-    st.markdown("---")
-    st.markdown("### 🧠 Modelo")
+    st.divider()
 
-    st.markdown("""
-    <div class="panel">
-        <div class="panel-title">GPT-4o</div>
-        <div class="panel-description">
-            Análisis visual, descripción de escenas,
-            objetos, texto visible y contexto proporcionado.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.caption("Modelo utilizado")
+    st.code("gpt-4o", language=None)
 
-    st.markdown("### 💡 Consejos")
-    st.markdown("""
-    <div class="sidebar-caption">
-        • Usa imágenes claras y legibles.<br>
-        • Añade contexto para orientar el análisis.<br>
-        • Formula instrucciones específicas.<br>
-        • Comprueba los datos extraídos de gráficos.
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    if st.button("🗑️ Limpiar análisis", use_container_width=True):
-        st.session_state.analysis_result = None
-        st.session_state.analysis_signature = None
-        st.rerun()
+    st.caption("Los análisis pueden tener un costo según "
+               "el uso de la API.")
 
 
-# ==================================================
-# CABECERA
-# ==================================================
+# --------------------------------------------------
+# Encabezado
+# --------------------------------------------------
 
-st.markdown("""
-<div class="hero">
-    <div class="eyebrow">✦ COMPUTER VISION · GENERATIVE AI</div>
-    <h1>Descubre lo que hay en tu imagen.</h1>
-    <div class="hero-subtitle">
-        Sube una imagen, añade tus instrucciones y deja que la
-        inteligencia artificial te ayude a interpretar su contenido.
-        Obtén descripciones, identifica elementos y explora detalles.
-    </div>
-</div>
-""", unsafe_allow_html=True)
+st.title("Análisis de imágenes")
+
+st.markdown(
+    """
+    <p class="subtitle">
+        Carga una imagen, selecciona el tipo de análisis
+        y consulta los resultados generados por inteligencia artificial.
+    </p>
+    """,
+    unsafe_allow_html=True,
+)
 
 
-# ==================================================
-# ÁREA PRINCIPAL
-# ==================================================
+# --------------------------------------------------
+# Entrada y configuración del análisis
+# --------------------------------------------------
 
-col_image, col_config = st.columns([1.15, 0.85], gap="large")
+image_column, settings_column = st.columns(
+    [1.15, 0.85],
+    gap="large",
+)
 
-with col_image:
+with image_column:
     st.markdown(
-        '<div class="section-label">01 / TU IMAGEN</div>',
+        '<p class="section-label">01 — Imagen de entrada</p>',
         unsafe_allow_html=True,
     )
 
     uploaded_file = st.file_uploader(
         "Selecciona una imagen",
         type=["jpg", "jpeg", "png", "webp"],
-        help="Formatos admitidos: JPG, JPEG, PNG y WEBP.",
+        help="Formatos admitidos: JPG, PNG y WEBP.",
     )
 
-    if uploaded_file is not None:
+    if uploaded_file:
         try:
-            image = Image.open(uploaded_file)
-            image = ImageOps.exif_transpose(image)
-            image.load()
+            preview_image = Image.open(uploaded_file)
+            preview_image = ImageOps.exif_transpose(preview_image)
 
             st.image(
-                image,
-                caption=uploaded_file.name,
+                preview_image,
                 use_container_width=True,
             )
 
             st.caption(
-                f"Formato: {image.format or 'Imagen'} · "
-                f"Resolución: {image.width} × {image.height} px"
+                f"Archivo: {uploaded_file.name} · "
+                f"{preview_image.width} × {preview_image.height} px"
             )
 
         except Exception:
-            st.error("No se pudo abrir la imagen. Prueba con otro archivo.")
-            image = None
+            st.error("No fue posible abrir el archivo seleccionado.")
+
     else:
-        image = None
-        st.markdown("""
-        <div class="panel" style="text-align:center; padding: 48px 20px;">
-            <div style="font-size:3.5rem; margin-bottom:12px;">🖼️</div>
-            <div class="panel-title">Tu espacio de análisis</div>
-            <div class="panel-description">
-                Selecciona una imagen para ver aquí la vista previa.
-                <br>JPG · PNG · WEBP
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.info(
+            "Selecciona una imagen para visualizarla "
+            "y preparar el análisis."
+        )
 
 
-with col_config:
+with settings_column:
     st.markdown(
-        '<div class="section-label">02 / INSTRUCCIONES</div>',
+        '<p class="section-label">02 — Parámetros del análisis</p>',
         unsafe_allow_html=True,
     )
 
     analysis_type = st.selectbox(
-        "¿Qué deseas analizar?",
+        "Tipo de análisis",
         [
             "Descripción general",
-            "Identificación de objetos",
-            "Lectura de texto (OCR visual)",
-            "Análisis de gráfico o tabla",
-            "Análisis técnico",
-            "Instrucciones personalizadas",
+            "Análisis detallado",
+            "Lectura de texto",
+            "Pregunta personalizada",
         ],
     )
 
-    prompts = {
-        "Descripción general":
-            "Describe detalladamente lo que aparece en la imagen. "
-            "Organiza la respuesta por elementos principales, "
-            "escena y detalles relevantes.",
-
-        "Identificación de objetos":
-            "Identifica los objetos y elementos visibles. "
-            "Describe su apariencia, ubicación aproximada "
-            "y relaciones entre ellos. No inventes objetos.",
-
-        "Lectura de texto (OCR visual)":
-            "Transcribe el texto visible en la imagen con la mayor "
-            "fidelidad posible. Organiza el resultado por secciones "
-            "y señala cualquier parte que no sea legible.",
-
-        "Análisis de gráfico o tabla":
-            "Analiza el gráfico o tabla. Explica sus variables, "
-            "tendencias, valores y conclusiones que estén respaldadas "
-            "por la información visible. No inventes valores ni fechas.",
-
-        "Análisis técnico":
-            "Realiza un análisis técnico de la imagen. Describe "
-            "sus componentes, características y posibles problemas "
-            "visibles. Diferencia claramente las observaciones "
-            "de las inferencias.",
-
-        "Instrucciones personalizadas": "",
-    }
-
-    custom_prompt = st.text_area(
-        "¿Qué quieres saber?",
-        value=prompts[analysis_type],
-        height=155,
-        placeholder="Escribe las instrucciones para la IA...",
-    )
-
-    with st.expander("➕ Añadir contexto adicional"):
-        additional_details = st.text_area(
-            "Contexto opcional",
-            placeholder=(
-                "Ej.: es un gráfico de consumo eléctrico; "
-                "quiero comparar las horas de mayor demanda."
-            ),
-            height=100,
+    if analysis_type == "Pregunta personalizada":
+        context_label = "Pregunta sobre la imagen"
+        context_placeholder = (
+            "Ejemplo: ¿Qué objetos aparecen en primer plano?"
+        )
+    else:
+        context_label = "Contexto adicional (opcional)"
+        context_placeholder = (
+            "Añade información o instrucciones para orientar "
+            "el análisis."
         )
 
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    analyze_button = st.button(
-        "✨ Analizar imagen",
-        use_container_width=True,
-        type="primary",
+    context = st.text_area(
+        context_label,
+        placeholder=context_placeholder,
+        height=150,
     )
 
     st.caption(
-        "El análisis utiliza GPT-4o a través de la API de OpenAI. "
-        "El uso de la API puede generar costos."
+        "El contexto ayuda a orientar la respuesta, "
+        "pero no garantiza que todos los detalles sean correctos."
+    )
+
+    analyze_button = st.button(
+        "Analizar imagen",
+        type="primary",
+        disabled=not bool(uploaded_file and api_key.strip()),
     )
 
 
-# ==================================================
-# ANÁLISIS
-# ==================================================
+# --------------------------------------------------
+# Procesamiento
+# --------------------------------------------------
 
 if analyze_button:
-    if image is None or uploaded_file is None:
-        st.warning("Primero debes cargar una imagen.")
-
-    elif not api_key.strip():
-        st.warning("Ingresa tu clave API en la barra lateral.")
-
-    elif not custom_prompt.strip():
-        st.warning("Escribe una instrucción para orientar el análisis.")
-
+    if analysis_type == "Pregunta personalizada" and not context.strip():
+        st.warning("Escribe la pregunta que quieres realizar.")
     else:
         try:
-            # Convertir la imagen a JPEG para mantener
-            # un formato compatible con la solicitud.
-            rgb_image = image.convert("RGB")
-            buffer = io.BytesIO()
-            rgb_image.save(buffer, format="JPEG", quality=90)
-            base64_image = base64.b64encode(
-                buffer.getvalue()
-            ).decode("utf-8")
+            with st.spinner("Analizando la imagen..."):
+                _, encoded_image = prepare_image(uploaded_file)
 
-            prompt_text = (
-                "Responde siempre en español. "
-                "Analiza la imagen basándote en lo que realmente puedes observar. "
-                "Distingue los hechos visibles de las inferencias y no inventes "
-                "datos que no estén presentes.\n\n"
-                f"INSTRUCCIONES:\n{custom_prompt.strip()}"
-            )
-
-            if additional_details.strip():
-                prompt_text += (
-                    "\n\nCONTEXTO ADICIONAL DEL USUARIO:\n"
-                    f"{additional_details.strip()}"
+                result = analyze_image(
+                    api_key=api_key.strip(),
+                    encoded_image=encoded_image,
+                    analysis_type=analysis_type,
+                    context=context,
                 )
 
-            with st.spinner(
-                "🔬 Analizando los elementos de la imagen..."
-            ):
-                client = OpenAI(api_key=api_key.strip())
-
-                response = client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": prompt_text,
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": (
-                                            "data:image/jpeg;base64,"
-                                            f"{base64_image}"
-                                        )
-                                    },
-                                },
-                            ],
-                        }
-                    ],
-                    max_tokens=800,
-                )
-
-                result = response.choices[0].message.content
-
-                if not result:
-                    raise ValueError(
-                        "El modelo no devolvió una respuesta."
-                    )
-
-                st.session_state.analysis_result = result
-                st.session_state.analysis_signature = (
-                    uploaded_file.name,
-                    len(uploaded_file.getvalue()),
-                    analysis_type,
-                    custom_prompt,
-                    additional_details,
-                )
+                st.session_state["analysis_result"] = result
+                st.session_state["analysis_filename"] = uploaded_file.name
+                st.session_state["analysis_type"] = analysis_type
 
         except Exception as error:
             st.error(
-                "No se pudo completar el análisis. "
-                "Verifica tu clave API, conexión y acceso al modelo."
+                "No fue posible completar el análisis. "
+                "Verifica la clave API, tu conexión y los detalles "
+                "del error."
             )
-            st.caption(f"Detalle técnico: {error}")
+            st.caption(str(error))
 
 
-# ==================================================
-# RESULTADO
-# ==================================================
+# --------------------------------------------------
+# Resultados
+# --------------------------------------------------
 
-if st.session_state.analysis_result:
-    st.markdown("---")
+if st.session_state.get("analysis_result"):
+    st.divider()
 
     st.markdown(
-        '<div class="section-label">03 / RESULTADO DEL ANÁLISIS</div>',
+        '<p class="section-label">03 — Resultado</p>',
         unsafe_allow_html=True,
     )
 
-    st.markdown("## ✨ Esto es lo que encontré")
-
-    st.markdown(
-        f'<div class="result-box">'
-        f'{st.session_state.analysis_result}'
-        f'</div>',
-        unsafe_allow_html=True,
+    st.subheader(
+        st.session_state.get(
+            "analysis_filename",
+            "Resultado del análisis",
+        )
     )
+
+    st.caption(
+        "Tipo de análisis: "
+        + st.session_state.get("analysis_type", "No especificado")
+    )
+
+    st.markdown(st.session_state["analysis_result"])
 
     st.download_button(
-        label="⬇️ Descargar análisis (.txt)",
-        data=st.session_state.analysis_result,
-        file_name="analisis_imagen.txt",
+        label="Descargar resultado (.txt)",
+        data=st.session_state["analysis_result"],
+        file_name="resultado_visionai.txt",
         mime="text/plain",
     )
 
-
-# ==================================================
-# PIE DE PÁGINA
-# ==================================================
-
-st.markdown("""
-<div class="footer">
-    VisionAI · Powered by Streamlit & OpenAI
-    <br>Inteligencia artificial aplicada al análisis visual.
-</div>
-""", unsafe_allow_html=True)
+st.markdown(
+    """
+    <p class="footer-note">
+        VisionAI · Análisis de imágenes mediante OpenAI
+    </p>
+    """,
+    unsafe_allow_html=True,
+)
